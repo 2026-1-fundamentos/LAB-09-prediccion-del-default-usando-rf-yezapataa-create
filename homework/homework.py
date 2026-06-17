@@ -116,15 +116,24 @@ def clean_data(df):
         df_cleaned.rename(columns={"default payment next month": "default"}, inplace=True)
     if "ID" in df_cleaned.columns:
         df_cleaned.drop(columns=["ID"], inplace=True)
+    
+    # Limpieza exigida por este laboratorio en específico:
+    # Descartar valores en 0 para matrimonio y educación
+    df_cleaned = df_cleaned[df_cleaned["MARRIAGE"] != 0]
+    df_cleaned = df_cleaned[df_cleaned["EDUCATION"] != 0]
+    # Agrupar educación superior a 4 dentro de la categoría 4
+    df_cleaned["EDUCATION"] = df_cleaned["EDUCATION"].apply(lambda x: 4 if x >= 4 else x)
+    
     df_cleaned.dropna(inplace=True)
-    if "EDUCATION" in df_cleaned.columns:
-        df_cleaned["EDUCATION"] = df_cleaned["EDUCATION"].apply(lambda x: 4 if x > 4 else x)
     return df_cleaned
 
 def main():
-    # Cargar directamente los archivos ZIP
-    train_df = pd.read_csv("files/input/train_data.csv.zip", compression="zip")
-    test_df = pd.read_csv("files/input/test_data.csv.zip", compression="zip")
+    # Rutas relativas seguras
+    train_path = "files/input/train_data.csv.zip"
+    test_path = "files/input/test_data.csv.zip"
+    
+    train_df = pd.read_csv(train_path, compression="zip")
+    test_df = pd.read_csv(test_path, compression="zip")
     
     train_df = clean_data(train_df)
     test_df = clean_data(test_df)
@@ -144,15 +153,16 @@ def main():
         remainder="passthrough"
     )
     
+    # IMPORTANTE: El nombre debe coincidir con los parámetros ("classifier")
     pipeline = Pipeline([
-        ("OneHotEncoder", preprocessor),
-        ("RandomForestClassifier", RandomForestClassifier(random_state=42))
+        ("preprocessor", preprocessor),
+        ("classifier", RandomForestClassifier(random_state=42))
     ])
     
-    # Malla ultraligera para no colapsar el autograder de GitHub Actions
+    # Malla ultraligera
     param_grid = {
-        "RandomForestClassifier__n_estimators": [100],
-        "RandomForestClassifier__max_depth": [None]
+        "classifier__n_estimators": [100],
+        "classifier__max_depth": [None]
     }
     
     model = GridSearchCV(
@@ -166,7 +176,7 @@ def main():
     
     model.fit(X_train, y_train)
     
-    # Guardar modelo en las rutas relativas requeridas
+    # Guardar modelo
     os.makedirs("files/models", exist_ok=True)
     with gzip.open("files/models/model.pkl.gz", "wb") as f:
         pickle.dump(model, f)
