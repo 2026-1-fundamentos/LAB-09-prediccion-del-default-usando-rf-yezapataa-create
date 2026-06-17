@@ -131,16 +131,17 @@ def create_pipeline() -> Pipeline:
     )
 
 def create_estimator(pipeline: Pipeline) -> GridSearchCV:
-    # Malla simplificada para evitar el timeout en GitHub Actions
+
     param_grid = {
-        "classifier__n_estimators": [50],
-        "classifier__max_depth": [10]
+        "classifier__n_estimators": [150],
+        "classifier__max_depth": [None],
+        "classifier__min_samples_leaf": [1, 2]
     }
 
     return GridSearchCV(
         pipeline,
         param_grid,
-        cv=5,
+        cv=5, 
         scoring="balanced_accuracy",
         n_jobs=-1,
         refit=True,
