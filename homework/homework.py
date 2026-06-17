@@ -97,7 +97,6 @@ import json
 import gzip
 import pickle
 import pandas as pd
-
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
@@ -112,33 +111,19 @@ from sklearn.metrics import (
 )
 
 def clean_data(df):
-    """Aplica las reglas de limpieza especificadas en el Paso 1."""
     df_cleaned = df.copy()
-    
-    # Renombrar la columna objetivo
     if "default payment next month" in df_cleaned.columns:
         df_cleaned.rename(columns={"default payment next month": "default"}, inplace=True)
-        
-    # Remover la columna ID
     if "ID" in df_cleaned.columns:
         df_cleaned.drop(columns=["ID"], inplace=True)
-        
-    # Eliminar registros nulos
     df_cleaned.dropna(inplace=True)
-    
-    # Agrupar valores > 4 en EDUCATION a la categoría 4 ('others')
     if "EDUCATION" in df_cleaned.columns:
         df_cleaned["EDUCATION"] = df_cleaned["EDUCATION"].apply(lambda x: 4 if x > 4 else x)
-        
     return df_cleaned
 
 def main():
-    # -------------------------------------------------------------------------
-    # Paso 1 & 2: Cargar y limpiar datos, dividiéndolos en X e Y
-    # -------------------------------------------------------------------------
-    input_dir = "files/input/"
+    input_dir = os.path.abspath("files/input/")
     
-    # Buscar dinámicamente los archivos de train y test
     train_file = [f for f in os.listdir(input_dir) if "train" in f.lower()][0]
     test_file = [f for f in os.listdir(input_dir) if "test" in f.lower()][0]
     
@@ -154,13 +139,8 @@ def main():
     X_test = test_df.drop(columns=["default"])
     y_test = test_df["default"]
     
-    # -------------------------------------------------------------------------
-    # Paso 3: Crear el Pipeline
-    # -------------------------------------------------------------------------
-    # Según las descripciones, estas son las variables categóricas
     categorical_features = ["SEX", "EDUCATION", "MARRIAGE"]
     
-    # Se utiliza ColumnTransformer para aplicar OneHotEncoding solo a las categóricas
     preprocessor = ColumnTransformer(
         transformers=[
             ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_features)
@@ -168,19 +148,14 @@ def main():
         remainder="passthrough"
     )
     
-    # Importante: Mantener los nombres exactos requeridos por el test
     pipeline = Pipeline([
         ("OneHotEncoder", preprocessor),
         ("RandomForestClassifier", RandomForestClassifier(random_state=42))
     ])
     
-    # -------------------------------------------------------------------------
-    # Paso 4: Optimizar Hiperparámetros (Validación Cruzada de 10 splits)
-    # -------------------------------------------------------------------------
-    # Malla ligera para cumplir el requisito de optimización sin demorar demasiado
     param_grid = {
-        "RandomForestClassifier__n_estimators": [100, 150],
-        "RandomForestClassifier__max_depth": [None, 10]
+        "RandomForestClassifier__n_estimators": [100],
+        "RandomForestClassifier__max_depth": [10]
     }
     
     model = GridSearchCV(
@@ -193,22 +168,16 @@ def main():
     
     model.fit(X_train, y_train)
     
-    # -------------------------------------------------------------------------
-    # Paso 5: Guardar el modelo
-    # -------------------------------------------------------------------------
-    os.makedirs("files/models", exist_ok=True)
-    with gzip.open("files/models/model.pkl.gz", "wb") as f:
+    models_dir = os.path.abspath("files/models")
+    os.makedirs(models_dir, exist_ok=True)
+    with gzip.open(os.path.join(models_dir, "model.pkl.gz"), "wb") as f:
         pickle.dump(model, f)
         
-    # -------------------------------------------------------------------------
-    # Paso 6 & 7: Calcular métricas y matrices de confusión
-    # -------------------------------------------------------------------------
     y_train_pred = model.predict(X_train)
     y_test_pred = model.predict(X_test)
     
     metrics = []
     
-    # Métricas para Train
     metrics.append({
         "type": "metrics",
         "dataset": "train",
@@ -218,7 +187,6 @@ def main():
         "f1_score": float(f1_score(y_train, y_train_pred))
     })
     
-    # Métricas para Test
     metrics.append({
         "type": "metrics",
         "dataset": "test",
@@ -228,7 +196,6 @@ def main():
         "f1_score": float(f1_score(y_test, y_test_pred))
     })
     
-    # Matriz de confusión para Train
     cm_train = confusion_matrix(y_train, y_train_pred)
     metrics.append({
         "type": "cm_matrix",
@@ -237,7 +204,6 @@ def main():
         "true_1": {"predicted_0": int(cm_train[1, 0]), "predicted_1": int(cm_train[1, 1])}
     })
     
-    # Matriz de confusión para Test
     cm_test = confusion_matrix(y_test, y_test_pred)
     metrics.append({
         "type": "cm_matrix",
@@ -246,9 +212,9 @@ def main():
         "true_1": {"predicted_0": int(cm_test[1, 0]), "predicted_1": int(cm_test[1, 1])}
     })
     
-    # Guardar archivo output JSON Lines
-    os.makedirs("files/output", exist_ok=True)
-    with open("files/output/metrics.json", "w", encoding="utf-8") as f:
+    output_dir = os.path.abspath("files/output")
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, "metrics.json"), "w", encoding="utf-8") as f:
         for metric in metrics:
             f.write(json.dumps(metric) + "\n")
 
